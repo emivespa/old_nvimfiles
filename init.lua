@@ -1,13 +1,12 @@
--- vim.o.clipboard = 'unnamedplus'
--- vim.o.path = vim.o.path .. '**' -- Search into subfolders, tab complete paths.
 vim.cmd.colorscheme 'koehler' -- Best built-in colorscheme.
 vim.cmd.filetype 'on'
 vim.cmd.syntax 'on'
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
-vim.g.netrw_banner = 1
-vim.g.netrw_hide = 0
+vim.g.netrw_banner = 0
+vim.g.netrw_hide = 1
 vim.g.netrw_liststyle = 3 -- Start in tree mode.
+vim.keymap.set('n', '<c-t>', [[:Lex<cr>:vertical resize 38<cr>]])
 vim.keymap.set('n', 'y', [["+y]])
 vim.keymap.set('v', 'y', [["+y]])
 vim.o.autowrite = true
@@ -43,7 +42,7 @@ vim.o.showmode = true
 vim.o.splitbelow = true
 vim.o.splitright = true
 vim.o.startofline = false
-vim.o.textwidth = 80 -- One True Arbitrary Number.
+vim.o.textwidth = 80
 vim.o.undofile = true
 vim.o.virtualedit = 'all' -- Viaje de ida.
 vim.o.wrap = false
@@ -94,6 +93,9 @@ require('lazy').setup({
         return col ~= 0 and vim.api.nvim_buf_get_lines(0, line - 1, line, true)[1]:sub(col, col):match("%s") == nil
       end
       cmp.setup({
+        completion = {
+          completeopt = table.concat(vim.opt.completeopt:get(), ","),
+        },
         snippet = {
           expand = function(args)
             luasnip.lsp_expand(args.body)
@@ -101,11 +103,11 @@ require('lazy').setup({
         },
         sources = {
           { name = 'buffer', },
-          { name = 'emoji', keyword_pattern = ':' },
+          { name = 'emoji', keyword_pattern = ':', },
           { name = 'luasnip', },
           { name = 'nvim_lsp', },
           { name = 'nvim_lsp_signature_help' },
-          { name = 'path', }, -- TODO: keyword_pattern.
+          { name = 'path', keyword_patterh = '/', }, -- Works for ~/, ./, ../.
         },
         formatting = {
           -- fields = {'menu', 'abbr', 'kind'},
@@ -124,7 +126,9 @@ require('lazy').setup({
           end,
         },
         mapping = {
-          ['<CR>'] = cmp.mapping.confirm({select = false}),
+          ['<CR>'] = cmp.mapping.confirm({
+            select = false,
+          }),
           ["<Tab>"] = cmp.mapping(function(fallback)
             if cmp.visible() then
               cmp.select_next_item()
@@ -133,7 +137,8 @@ require('lazy').setup({
             elseif luasnip.expand_or_jumpable() then
               luasnip.expand_or_jump()
             elseif has_words_before() then
-              cmp.complete()
+              -- cmp.complete()
+              cmp.select_next_item()
             else
               fallback()
             end
@@ -292,6 +297,7 @@ require('lazy').setup({
           -- https://github.com/jose-elias-alvarez/null-ls.nvim/blob/main/doc/BUILTINS.md
           -- https://github.com/jose-elias-alvarez/null-ls.nvim/blob/main/doc/BUILTIN_CONFIG.md
           -- local sources = { null_ls.builtins.completion.luasnip }
+          null_ls.builtins.formatting.astyle,
           null_ls.builtins.code_actions.ts_node_action,
           null_ls.builtins.diagnostics.checkmake,
           null_ls.builtins.formatting.nixfmt,
