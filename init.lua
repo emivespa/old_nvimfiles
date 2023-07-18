@@ -8,7 +8,7 @@ vim.g.netrw_liststyle = 3 -- Start in tree mode.
 vim.keymap.set("n", "y", [["+y]])
 vim.keymap.set("v", "y", [["+y]])
 vim.o.autowrite = true
-vim.o.belloff = "" -- vim default.
+vim.o.belloff = "" -- Vim default.
 vim.o.breakindent = true
 vim.o.confirm = true -- Have destructive commands y-n prompt instead of fail.
 vim.o.encoding = "utf-8"
@@ -20,7 +20,6 @@ vim.o.guicursor = ""
 vim.o.hlsearch = true
 vim.o.ignorecase = false
 vim.o.joinspaces = false -- Single space after a period.
--- vim.o.laststatus = 1 -- Only show statusbar if there are >1 windows.
 vim.o.lazyredraw = true -- No redrawing while executing macros.
 vim.o.linebreak = true
 vim.o.list = false
@@ -45,7 +44,6 @@ vim.o.undofile = true
 vim.o.virtualedit = "all" -- Viaje de ida.
 vim.o.wrap = false
 vim.o.wrapscan = false -- /, * and friends don't wrap around the file. (--search hit BOTTOM, continuing at TOP--)
-vim.opt.completeopt = { "menu", "menuone", "preview", "longest", "noselect" }
 
 -- https://github.com/folke/lazy.nvim - "zzz A modern plugin manager for Neovim"
 -- :help lazy.nvim.txt
@@ -61,7 +59,12 @@ if vim.loop.fs_stat(lazypath) then
 end
 
 require("lazy").setup({
-  -- TODO: DAP.
+  -- TODO: DAP
+
+  --------------------------------------------------------------------------------
+  --
+  -- no config plugins
+
   {
     -- colorscheme
     "https://gitlab.com/protesilaos/tempus-themes-vim",
@@ -82,6 +85,10 @@ require("lazy").setup({
   { "https://github.com/tpope/vim-vinegar", lazy = false }, -- vinegar (netrw)
   { "https://github.com/ahmedkhalf/project.nvim" }, -- project
 
+  --------------------------------------------------------------------------------
+  --
+  -- treesitter and friends
+
   {
     -- autopairs
     "https://github.com/windwp/nvim-autopairs",
@@ -94,68 +101,136 @@ require("lazy").setup({
   },
 
   {
-    -- cmp
+    -- comment
     --
     -- TODO: document where config is cargo culted from.
+    "https://github.com/numToStr/Comment.nvim",
+    dependencies = { "ts-context-commentstring", },
+    config = function()
+      require("Comment").setup({
+        pre_hook = require("ts_context_commentstring.integrations.comment_nvim").create_pre_hook(),
+      })
+    end,
+  },
+
+  {
+    -- treesitter
+    "https://github.com/nvim-treesitter/nvim-treesitter",
+    name = "treesitter",
+    dependencies = { "ts-context-commentstring" },
+    config = function()
+      require("nvim-treesitter.configs").setup({
+        ensure_installed = { "c", "lua", "vim", "vimdoc", "query" },
+        -- "the five listed parsers should always be installed"
+        -- https://github.com/nvim-treesitter/nvim-treesitter#modules
+        sync_install = false,
+        auto_install = true,
+
+        highlight = { enable = true },
+        indent = { enable = true },
+
+        -- https://github.com/nvim-treesitter/nvim-treesitter#incremental-selection
+        incremental_selection = {
+          enable = true,
+          keymaps = {
+            init_selection = "gnn", -- set to `false` to disable one of the mappings
+            node_incremental = "grn",
+            scope_incremental = "grc",
+            node_decremental = "grm",
+            -- init_selection = "<c-space>",
+            -- node_incremental = "<c-space>",
+            -- scope_incremental = "<c-s>",
+            -- node_decremental = "<M-space>",
+          },
+        },
+
+        autotag = { enable = true },
+        context_commentstring = {
+          enable = true,
+          enable_autocdm = false,
+        },
+      })
+      vim.cmd(
+        [[
+        set foldmethod=expr
+        set foldexpr=nvim_treesitter#foldexpr()
+        set nofoldenable " Disable folding at startup.
+        ]]
+      )
+    end,
+  },
+
+  {
+    "https://github.com/nvim-treesitter/nvim-treesitter-context",
+    dependencies = "treesitter",
+    config = function()
+      require("treesitter-context").setup({
+        min_window_height = 24,
+        mode = "topline", -- 'cursor' is distracting.
+      })
+    end,
+  },
+
+  {
+    -- ts-autotag
+    "https://github.com/windwp/nvim-ts-autotag",
+    dependencies = { "treesitter" },
+  },
+
+  {
+    -- ts-context-commentstring
+    "https://github.com/JoosepAlviste/nvim-ts-context-commentstring",
+    name = "ts-context-commentstring",
+  },
+
+  --------------------------------------------------------------------------------
+  --
+  -- eldritch horrors
+
+  {
+    -- cmp
     "https://github.com/hrsh7th/nvim-cmp",
     name = "cmp",
     dependencies = { "luasnip" },
     config = function()
-      vim.opt.completeopt = { "menu", "menuone", "preview", "noinsert", "noselect" }
-      local cmp = require("cmp")
-      local luasnip = require("luasnip")
       local has_words_before = function()
         unpack = unpack or table.unpack
         local line, col = unpack(vim.api.nvim_win_get_cursor(0))
         return col ~= 0 and vim.api.nvim_buf_get_lines(0, line - 1, line, true)[1]:sub(col, col):match("%s") == nil
       end
+      -- Set up nvim-cmp.
+      local cmp = require'cmp'
       cmp.setup({
-        completion = {
-          completeopt = table.concat(vim.opt.completeopt:get(), ","),
-        },
         snippet = {
+          -- REQUIRED - you must specify a snippet engine
           expand = function(args)
-            luasnip.lsp_expand(args.body)
+            -- vim.fn["vsnip#anonymous"](args.body) -- For `vsnip` users.
+            require('luasnip').lsp_expand(args.body) -- For `luasnip` users.
+            -- require('snippy').expand_snippet(args.body) -- For `snippy` users.
+            -- vim.fn["UltiSnips#Anon"](args.body) -- For `ultisnips` users.
           end,
         },
-        sources = {
-          { name = "buffer" },
-          { name = "emoji", keyword_pattern = ":" },
-          { name = "luasnip" },
-          { name = "nvim_lsp" },
-          { name = "nvim_lsp_signature_help" },
-          { name = "path", keyword_patterh = "/" }, -- Works for ~/, ./, ../.
+        window = {
+          -- completion = cmp.config.window.bordered(),
+          -- documentation = cmp.config.window.bordered(),
         },
-        formatting = {
-          -- fields = {'menu', 'abbr', 'kind'},
-          fields = { "abbr", "kind", "menu" },
-          format = function(entry, item)
-            local menu_icon = {
-              buffer = "buffer",
-              emoji = "emoji",
-              luasnip = "luasnip",
-              nvim_lsp = "nvim_lsp",
-              nvim_lsp_signature_help = "nvim_lsp_signature_help",
-              path = "path",
-            }
-            item.menu = menu_icon[entry.source.name]
-            return item
-          end,
-        },
-        mapping = {
-          ["<CR>"] = cmp.mapping.confirm({
-            select = false,
-          }),
+        mapping = cmp.mapping.preset.insert({
+          ['<C-b>'] = cmp.mapping.scroll_docs(-4),
+          ['<C-f>'] = cmp.mapping.scroll_docs(4),
+          ['<C-Space>'] = cmp.mapping.complete(),
+          ['<C-e>'] = cmp.mapping.abort(),
+          ['<CR>'] = cmp.mapping.confirm({ select = true }), -- Accept currently selected item. Set `select` to `false` to only confirm explicitly selected items.
           ["<Tab>"] = cmp.mapping(function(fallback)
             if cmp.visible() then
-              cmp.select_next_item()
+              -- cmp.select_next_item()
+              cmp.select_next_item({ behavior = cmp.SelectBehavior.Select})
               -- You could replace the expand_or_jumpable() calls with expand_or_locally_jumpable()
               -- they way you will only jump inside the snippet region
             elseif luasnip.expand_or_jumpable() then
               luasnip.expand_or_jump()
             elseif has_words_before() then
               -- cmp.complete()
-              cmp.select_next_item()
+              cmp.select_next_item({ behavior = cmp.SelectBehavior.Select})
             else
               fallback()
             end
@@ -169,11 +244,24 @@ require("lazy").setup({
               fallback()
             end
           end, { "i", "s" }),
-        },
+        }),
+        sources = cmp.config.sources({
+          { name = 'nvim_lsp' },
+          -- { name = 'vsnip' }, -- For vsnip users.
+          { name = 'luasnip' }, -- For luasnip users.
+          -- { name = 'ultisnips' }, -- For ultisnips users.
+          -- { name = 'snippy' }, -- For snippy users.
+          --
+          { name = 'buffer' },
+          { name = "path", keyword_patterh = "/" }, -- Works for ~/, ./, ../.
+          { name = "emoji", keyword_pattern = ":" },
+          -- { name = "luasnip" },
+          -- { name = "nvim_lsp" },
+          { name = "nvim_lsp_signature_help" },
+        })
       })
     end,
   },
-
   -- cmp sources
   { "https://github.com/hrsh7th/cmp-nvim-lsp-signature-help", dependencies = { "cmp", "lspconfig" } },
   { "https://github.com/hrsh7th/cmp-buffer", dependencies = { "cmp" } },
@@ -182,103 +270,81 @@ require("lazy").setup({
   { "https://github.com/hrsh7th/cmp-path", dependencies = { "cmp" } },
 
   {
-    -- comment
-    --
-    -- TODO: document where config is cargo culted from.
-    "https://github.com/numToStr/Comment.nvim",
-    config = function()
-      require("Comment").setup({
-        pre_hook = require("ts_context_commentstring.integrations.comment_nvim").create_pre_hook(),
-      })
-    end,
-  },
-
-  -- { -- direnv
-  --   "https://github.com/direnv/direnv.vim",
-  -- },
-
-  {
-    -- fzf
-    "https://github.com/junegunn/fzf",
-    name = "fzf",
-  },
-
-  {
-    -- fzf.vim
-    --
-    -- TODO: document where config is cargo culted from.
-    "https://github.com/junegunn/fzf.vim",
-    dependencies = { "fzf" },
-    config = function()
-      vim.cmd([[
-        nnoremap <C-p> :GFiles!<Cr>
-        command! -bang -nargs=* GGrep
-          \ call fzf#vim#grep(
-          \ 'git grep --line-number -- '.shellescape(<q-args>), 0,
-          \ fzf#vim#with_preview({'dir': systemlist('git rev-parse --show-toplevel')[0]}), <bang>0)
-        nnoremap <C-g> :GGrep!<Cr>
-      ]])
-    end,
-  },
-
-  {
     -- lspconfig
-    --
-    -- TODO: document where config is cargo culted from.
     "https://github.com/neovim/nvim-lspconfig",
     name = "lspconfig",
     lazy = false,
     dependencies = { "mason-lspconfig", "neodev" },
     config = function()
-      vim.api.nvim_create_autocmd("LspAttach", {
-        desc = "LSP actions",
-        callback = function()
-          -- local bufmap = function(mode, lhs, rhs)
-          --   local opts = {buffer = true}
-          --   vim.keymap.set(mode, lhs, rhs, opts)
-          -- end
-          vim.keymap.set("n", "<leader>h", "<cmd>lua vim.lsp.buf.hover()<cr>", { buffer = true })
-          vim.keymap.set("n", "<leader>d", "<cmd>lua vim.lsp.buf.definition()<cr>", { buffer = true })
-          -- bufmap('n', '<leader>D', '<cmd>lua vim.lsp.buf.declaration()<cr>', { buffer = true, })
-          vim.keymap.set("n", "<leader>i", "<cmd>lua vim.lsp.buf.implementation()<cr>", { buffer = true })
-          vim.keymap.set("n", "<leader>t", "<cmd>lua vim.lsp.buf.type_definition()<cr>", { buffer = true })
-          vim.keymap.set("n", "<leader>rs", "<cmd>lua vim.lsp.buf.references()<cr>", { buffer = true })
-          vim.keymap.set("n", "<leader>s", "<cmd>lua vim.lsp.buf.signature_help()<cr>", { buffer = true })
-          vim.keymap.set("n", "<leader>rn", "<cmd>lua vim.lsp.buf.rename()<cr>", { buffer = true })
-          vim.keymap.set("n", "<leader>f", "<cmd>lua vim.lsp.buf.format({async = true})<cr>", { buffer = true })
-          vim.keymap.set("n", "<leader>ca", "<cmd>lua vim.lsp.buf.code_action()<cr>", { buffer = true })
-          vim.keymap.set("x", "<leader>rca", "<cmd>lua vim.lsp.buf.range_code_action()<cr>", { buffer = true })
-          vim.keymap.set("n", "<leader>of", "<cmd>lua vim.diagnostic.open_float()<cr>", { buffer = true })
-          vim.keymap.set("n", "[d", "<cmd>lua vim.diagnostic.goto_prev()<cr>", { buffer = true })
-          vim.keymap.set("n", "]d", "<cmd>lua vim.diagnostic.goto_next()<cr>", { buffer = true })
+      -- Source: https://github.com/neovim/nvim-lspconfig#suggested-configuration
+      -- Mods: no significant ones so far.
+      -- TODO: https://github.com/neovim/nvim-lspconfig/wiki/Autocompletion
+      -- TODO: https://github.com/neovim/nvim-lspconfig/wiki/Snippets
+      local lspconfig = require('lspconfig')
+      lspconfig.bashls.setup{}
+      lspconfig.clangd.setup{}
+      lspconfig.docker_compose_language_service.setup{}
+      lspconfig.dockerls.setup{}
+      lspconfig.golangci_lint_ls.setup{}
+      lspconfig.gopls.setup{}
+      lspconfig.lua_ls.setup{}
+      lspconfig.pyright.setup {}
+      lspconfig.tailwindcss.setup{}
+      lspconfig.terraformls.setup{}
+      lspconfig.tsserver.setup {}
+      lspconfig.efm.setup({
+        init_options = {documentFormatting = true},
+        settings = {
+          rootMarkers = {".git/"},
+          languages = {
+            lua = {
+              {formatCommand = "lua-format -i", formatStdin = true}
+            }
+          }
+        }
+      })
+      lspconfig.eslint.setup({
+        on_attach = function(client, bufnr)
+          vim.api.nvim_create_autocmd("BufWritePre", {
+            buffer = bufnr,
+            command = "EslintFixAll",
+          })
         end,
       })
-      -- Configs:
-      -- https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md
-      local capabilities = vim.lsp.protocol.make_client_capabilities()
-      capabilities.textDocument.completion.completionItem.snippetSupport = true
-      local lspconfig = require("lspconfig")
-      -- TODO: https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#yamlls
-      lspconfig.bashls.setup({})
-      lspconfig.docker_compose_language_service.setup({})
-      lspconfig.dockerls.setup({})
-      lspconfig.gopls.setup({})
-      lspconfig.lua_ls.setup({})
-      lspconfig.pyright.setup({})
-      lspconfig.tailwindcss.setup({})
-      lspconfig.terraformls.setup({})
-      lspconfig.tsserver.setup({})
-      -- vscode-langservers-extracted:
-      lspconfig.html.setup({ capabilities = capabilities })
-      lspconfig.cssls.setup({})
-      lspconfig.jsonls.setup({ capabilities = capabilities })
-      lspconfig.eslint.setup({
-        -- on_attach = function(client, bufnr)
-        --   vim.api.nvim_create_autocmd("BufWritePre", {
-        --     buffer = bufnr,
-        --     command = "EslintFixAll",
-        --   })
-        -- end,
+      -- Global mappings.
+      -- See `:help vim.diagnostic.*` for documentation on any of the below functions
+      vim.keymap.set('n', '<space>e', vim.diagnostic.open_float)
+      vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
+      vim.keymap.set('n', ']d', vim.diagnostic.goto_next)
+      vim.keymap.set('n', '<space>q', vim.diagnostic.setloclist)
+      -- Use LspAttach autocommand to only map the following keys
+      -- after the language server attaches to the current buffer
+      vim.api.nvim_create_autocmd('LspAttach', {
+        group = vim.api.nvim_create_augroup('UserLspConfig', {}),
+        callback = function(ev)
+          -- Enable completion triggered by <c-x><c-o>
+          vim.bo[ev.buf].omnifunc = 'v:lua.vim.lsp.omnifunc'
+          -- Buffer local mappings.
+          -- See `:help vim.lsp.*` for documentation on any of the below functions
+          local opts = { buffer = ev.buf }
+          vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
+          vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
+          vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
+          vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
+          vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
+          vim.keymap.set('n', '<space>wa', vim.lsp.buf.add_workspace_folder, opts)
+          vim.keymap.set('n', '<space>wr', vim.lsp.buf.remove_workspace_folder, opts)
+          vim.keymap.set('n', '<space>wl', function()
+            print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+          end, opts)
+          vim.keymap.set('n', '<space>D', vim.lsp.buf.type_definition, opts)
+          vim.keymap.set('n', '<space>rn', vim.lsp.buf.rename, opts)
+          vim.keymap.set({ 'n', 'v' }, '<space>ca', vim.lsp.buf.code_action, opts)
+          vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
+          vim.keymap.set('n', '<space>f', function()
+            vim.lsp.buf.format { async = true }
+          end, opts)
+        end,
       })
     end,
   },
@@ -288,7 +354,7 @@ require("lazy").setup({
     "https://github.com/L3MON4D3/LuaSnip",
     name = "luasnip",
     version = "1.*",
-    -- build = 'make install_jsregexp',
+    build = 'make install_jsregexp',
   },
 
   {
@@ -321,129 +387,31 @@ require("lazy").setup({
     end,
   },
 
+  --------------------------------------------------------------------------------
+  --
+  -- fzf
+
   {
-    -- null_ls
-    --
-    -- TODO: document where config is cargo culted from.
-    "https://github.com/jose-elias-alvarez/null-ls.nvim",
-    name = "null_ls",
-    dependencies = "plenary",
-    config = function()
-      local null_ls = require("null-ls")
-      null_ls.setup({
-        sources = {
-          -- https://github.com/jose-elias-alvarez/null-ls.nvim/blob/main/doc/BUILTINS.md
-          -- https://github.com/jose-elias-alvarez/null-ls.nvim/blob/main/doc/BUILTIN_CONFIG.md
-          -- local sources = { null_ls.builtins.completion.luasnip }
-          null_ls.builtins.formatting.astyle,
-          null_ls.builtins.code_actions.ts_node_action,
-          null_ls.builtins.diagnostics.checkmake,
-          null_ls.builtins.formatting.nixfmt,
-          null_ls.builtins.formatting.zigfmt,
-          null_ls.builtins.code_actions.eslint_d,
-          null_ls.builtins.diagnostics.eslint_d,
-          null_ls.builtins.formatting.eslint_d, -- eslint
-          null_ls.builtins.formatting.prettierd,
-          null_ls.builtins.formatting.gofumpt,
-          null_ls.builtins.formatting.goimports, -- go
-          null_ls.builtins.diagnostics.luacheck,
-          null_ls.builtins.formatting.stylua, -- null_ls.builtins.formatting.lua_format,
-          null_ls.builtins.code_actions.shellcheck,
-          null_ls.builtins.diagnostics.shellcheck,
-          null_ls.builtins.diagnostics.terraform_validate,
-          null_ls.builtins.formatting.terraform_fmt, -- tf
-        },
-        on_attach = function(client, bufnr) -- https://github.com/jose-elias-alvarez/null-ls.nvim/wiki/Formatting-on-save
-          if client.supports_method("textDocument/formatting") then
-            vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
-            -- vim.api.nvim_create_autocmd("BufWritePre", { -- shouldn't be async
-            vim.api.nvim_create_autocmd("BufWritePost", {
-              -- can be async
-              group = augroup,
-              buffer = bufnr,
-              callback = function()
-                -- on 0.8, you should use vim.lsp.buf.format({ bufnr = bufnr }) instead
-                -- vim.lsp.buf.formatting_sync()
-                vim.lsp.buf.format({
-                  bufnr = bufnr,
-                  timeout_ms = 5000,
-                  async = true,
-                })
-              end,
-            })
-          end
-        end,
-      })
-    end,
+    -- fzf
+    "https://github.com/junegunn/fzf",
+    name = "fzf",
   },
 
   {
-    -- plenary
-    "https://github.com/nvim-lua/plenary.nvim",
-    name = "plenary",
-  },
-
-  {
-    -- treesitter
+    -- fzf.vim
     --
     -- TODO: document where config is cargo culted from.
-    "https://github.com/nvim-treesitter/nvim-treesitter",
-    name = "treesitter",
-    dependencies = { "ts-context-commentstring" },
+    "https://github.com/junegunn/fzf.vim",
+    dependencies = { "fzf" },
     config = function()
-      require("nvim-treesitter.configs").setup({
-        ensure_installed = { "c", "lua", "vim", "vimdoc", "query" },
-        -- "the five listed parsers should always be installed"
-        -- https://github.com/nvim-treesitter/nvim-treesitter#modules
-        sync_install = false,
-        auto_install = true,
-
-        autotag = { enable = true },
-        highlight = { enable = true },
-        incremental_selection = {
-          enable = true,
-          keymaps = {
-            init_selection = "<c-space>",
-            node_incremental = "<c-space>",
-            scope_incremental = "<c-s>",
-            node_decremental = "<M-space>",
-          },
-        },
-
-        indent = { enable = true },
-        context_commentstring = {
-          enable = true,
-          enable_autocdm = false,
-        },
-      })
       vim.cmd([[
-        set foldmethod=expr
-        set foldexpr=nvim_treesitter#foldexpr()
-        set nofoldenable " Disable folding at startup.
+      nnoremap <C-p> :GFiles!<Cr>
+      command! -bang -nargs=* GGrep
+      \ call fzf#vim#grep(
+      \ 'git grep --line-number -- '.shellescape(<q-args>), 0,
+      \ fzf#vim#with_preview({'dir': systemlist('git rev-parse --show-toplevel')[0]}), <bang>0)
+      nnoremap <C-g> :GGrep!<Cr>
       ]])
     end,
-  },
-
-  {
-    "https://github.com/nvim-treesitter/nvim-treesitter-context",
-    dependencies = "treesitter",
-    config = function()
-      require("treesitter-context").setup({
-        min_window_height = 24,
-        mode = "topline", -- 'cursor' is distracting.
-      })
-    end,
-  },
-
-  {
-    -- ts-autotag
-    "https://github.com/windwp/nvim-ts-autotag",
-    dependencies = { "treesitter" },
-  },
-
-  {
-    -- ts-context-commentstring
-    "https://github.com/JoosepAlviste/nvim-ts-context-commentstring",
-    name = "ts-context-commentstring",
   },
 })
